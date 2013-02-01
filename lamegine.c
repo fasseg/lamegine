@@ -230,7 +230,6 @@ void render_scene() {
 		normalize(&velocity);
 		scale(&velocity,0.1);
 		add(&camera,&velocity);
-		print_vector(&velocity,"V");
 	}
 	glTranslatef(camera.x, camera.y, camera.z);
 
