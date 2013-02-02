@@ -193,18 +193,18 @@ void render_scene() {
 
 	set_vector_null(&velocity);
 	if ((movement_flags & FLAG_MOVE_FORWARD) == FLAG_MOVE_FORWARD) {
-		add(&velocity, &los);
+		add(&velocity, los);
 	}
 	if ((movement_flags & FLAG_MOVE_BACKWARDS) == FLAG_MOVE_BACKWARDS) {
-		subtract(&velocity, &los);
+		subtract(&velocity, los);
 	}
 	if ((movement_flags & FLAG_MOVE_RIGHT) == FLAG_MOVE_RIGHT) {
-		Vector3f cross = cross_product(&los, &world_up);
-		add(&velocity, &cross);
+		Vector3f cross = cross_product(los, world_up);
+		add(&velocity, cross);
 	}
 	if ((movement_flags & FLAG_MOVE_LEFT) == FLAG_MOVE_LEFT) {
-		Vector3f cross = cross_product(&world_up, &los);
-		add(&velocity, &cross);
+		Vector3f cross = cross_product(world_up, los);
+		add(&velocity, cross);
 	}
 	if ((movement_flags & FLAG_ROTATE_RIGHT) == FLAG_ROTATE_RIGHT) {
 		rotate_y(&los, -3);
@@ -249,10 +249,10 @@ void render_scene() {
 	}
 	glRotatef(-angle_y, 0.0, 1.0, 0.0);
 
-	if (magnitude(&velocity) > 0.0) {
+	if (magnitude(velocity) > 0.0) {
 		normalize(&velocity);
 		scale(&velocity, 0.1);
-		add(&camera, &velocity);
+		add(&camera, velocity);
 		if (camera.y > 0.0){
 			camera.y = 0.0;
 		}
