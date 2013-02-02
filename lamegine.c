@@ -54,17 +54,20 @@ int main(char** argv, int argc) {
 	glXMakeCurrent(dsp, wnd, glx);
 	glEnable(GL_DEPTH_TEST);
 
-// disable auto repeat
+	// disable auto repeat
 	Bool detectableAutoRepeatSupported;
 	XkbSetDetectableAutoRepeat(dsp, True, &detectableAutoRepeatSupported);
 	printf("detectable autorepeat supported: %d\n",
 			detectableAutoRepeatSupported);
 
-// registering listener for interesting events
+	// registering listener for interesting events
 	XSelectInput(dsp, wnd,
 			KeyPressMask | KeyReleaseMask | ExposureMask | PointerMotionMask);
 
 	Bool exposed = False;
+
+	// init alsa audio sub system
+	// init_sound();
 	printf("\ninitialization done\n");
 
 	for (;;) {
@@ -217,7 +220,6 @@ void render_scene() {
 		double current = current_ms();
 		double t = current - last_jump_ts - 250;
 		velocity.y = 2.0*t/500.0;
-		print_vector(&velocity, "Vj");
 		if (t >= 250.0){
 			last_jump_ts = 0.0;
 			movement_flags &= ~FLAG_JUMP;

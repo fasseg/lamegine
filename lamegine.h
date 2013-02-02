@@ -14,7 +14,9 @@
 #include <GL/glu.h>
 #include <math.h>
 #include <time.h>
+#include <pulse/pulseaudio.h>
 #include "vectors.h"
+#include "audio.h"
 
 #ifndef LAMEGINE_H_
 #define LAMEGINE_H_
