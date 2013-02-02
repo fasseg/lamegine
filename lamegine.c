@@ -6,7 +6,6 @@
  */
 #include "lamegine.h"
 
-
 Vector3f velocity = { .x = 0.0, .y = 0.0, .z = 0.0 };
 Vector3f camera = { .x = 0.0, .y = 0.0, .z = 0.0 };
 Vector3f los = { .x = 0.0, .y = 0.0, .z = 1.0 };
@@ -15,13 +14,14 @@ Vector3f world_up = { .x = 0.0, .y = 1.0, .z = 0.0 };
 int last_mouse_pos_x;
 float smooth_rot_x;
 int movement_flags = 0;
+double last_jump_ts = 0.0;
 
 int main(char** argv, int argc) {
 	Display *dsp = XOpenDisplay(NIL);
 	assert(dsp);
 
-	int colorBlack = BlackPixel(dsp,DefaultScreen(dsp)) ;
-	int colorWhite = WhitePixel(dsp,DefaultScreen(dsp)) ;
+	int colorBlack = BlackPixel(dsp, DefaultScreen(dsp)) ;
+	int colorWhite = WhitePixel(dsp, DefaultScreen(dsp)) ;
 
 	Window root = DefaultRootWindow(dsp) ;
 
@@ -54,13 +54,13 @@ int main(char** argv, int argc) {
 	glXMakeCurrent(dsp, wnd, glx);
 	glEnable(GL_DEPTH_TEST);
 
-	// disable auto repeat
+// disable auto repeat
 	Bool detectableAutoRepeatSupported;
 	XkbSetDetectableAutoRepeat(dsp, True, &detectableAutoRepeatSupported);
 	printf("detectable autorepeat supported: %d\n",
 			detectableAutoRepeatSupported);
 
-	// registering listener for interesting events
+// registering listener for interesting events
 	XSelectInput(dsp, wnd,
 			KeyPressMask | KeyReleaseMask | ExposureMask | PointerMotionMask);
 
@@ -135,13 +135,18 @@ int main(char** argv, int argc) {
 						movement_flags &= ~FLAG_ROTATE_RIGHT;
 					}
 					break;
+				case XK_space:
+					if (e.type == KeyPress) {
+						movement_flags |= FLAG_JUMP;
+					}
+					break;
 				default:
 					break;
 				}
 			} else if (e.type == MotionNotify) {
-                int px = e.xmotion.x - last_mouse_pos_x;
-                last_mouse_pos_x = e.xmotion.x;
-                smooth_rot_x += px;
+				int px = e.xmotion.x - last_mouse_pos_x;
+				last_mouse_pos_x = e.xmotion.x;
+				smooth_rot_x += px;
 			}
 		} else if (exposed == True) {
 			camera.x = camera.x + velocity.x;
@@ -185,51 +190,70 @@ void render_scene() {
 
 	set_vector_null(&velocity);
 	if ((movement_flags & FLAG_MOVE_FORWARD) == FLAG_MOVE_FORWARD) {
-		add(&velocity,&los);
+		add(&velocity, &los);
 	}
 	if ((movement_flags & FLAG_MOVE_BACKWARDS) == FLAG_MOVE_BACKWARDS) {
-		subtract(&velocity,&los);
+		subtract(&velocity, &los);
 	}
 	if ((movement_flags & FLAG_MOVE_RIGHT) == FLAG_MOVE_RIGHT) {
 		Vector3f cross = cross_product(&los, &world_up);
-		add(&velocity,&cross);
+		add(&velocity, &cross);
 	}
 	if ((movement_flags & FLAG_MOVE_LEFT) == FLAG_MOVE_LEFT) {
 		Vector3f cross = cross_product(&world_up, &los);
-		add(&velocity,&cross);
+		add(&velocity, &cross);
 	}
 	if ((movement_flags & FLAG_ROTATE_RIGHT) == FLAG_ROTATE_RIGHT) {
-		rotate_y(&los,-3);
+		rotate_y(&los, -3);
 	}
 	if ((movement_flags & FLAG_ROTATE_LEFT) == FLAG_ROTATE_LEFT) {
-		rotate_y(&los,3);
+		rotate_y(&los, 3);
+	}
+
+	if ((movement_flags & FLAG_JUMP) == FLAG_JUMP) {
+		if (last_jump_ts == 0.0){
+			last_jump_ts = current_ms();
+		}
+		double current = current_ms();
+		double t = current - last_jump_ts - 250;
+		velocity.y = 2.0*t/500.0;
+		print_vector(&velocity, "Vj");
+		if (t >= 250.0){
+			last_jump_ts = 0.0;
+			movement_flags &= ~FLAG_JUMP;
+		}
 	}
 
 	// smooth look via mouse
-    if (smooth_rot_x > 1) {
-        float step = 1.0 + smooth_rot_x/2.0;
-        smooth_rot_x = smooth_rot_x - step;
-        rotate_y(&los, -step);
-    }else if (smooth_rot_x < -1){
-        float step = -1.0 + smooth_rot_x/2.0;
-        smooth_rot_x = smooth_rot_x - step;
-        rotate_y(&los, -step);
-    }
+	if (smooth_rot_x > 1) {
+//		float step = 1.0 + smooth_rot_x / 4.0;
+		float step = smooth_rot_x;
+		smooth_rot_x = smooth_rot_x - step;
+		rotate_y(&los, -step);
+	} else if (smooth_rot_x < -1) {
+		float step = smooth_rot_x;
+//		float step = -1.0 + smooth_rot_x / 4.0;
+		smooth_rot_x = smooth_rot_x - step;
+		rotate_y(&los, -step);
+	}
 
-	// calculate the angle between the LOS vector and the z axis
-	// since the whole thing will be rotated by this angle
+// calculate the angle between the LOS vector and the z axis
+// since the whole thing will be rotated by this angle
 	float angle_y;
-	if (los.z >= 0){
-		angle_y=asin(los.x) * 180/M_PI;
-	}else if(los.z < 0){
-		angle_y=180 - (asin(los.x) * 180/M_PI);
+	if (los.z >= 0) {
+		angle_y = asin(los.x) * 180 / M_PI;
+	} else if (los.z < 0) {
+		angle_y = 180 - (asin(los.x) * 180 / M_PI);
 	}
 	glRotatef(-angle_y, 0.0, 1.0, 0.0);
 
-	if (magnitude(&velocity) > 0.0){
+	if (magnitude(&velocity) > 0.0) {
 		normalize(&velocity);
-		scale(&velocity,0.1);
-		add(&camera,&velocity);
+		scale(&velocity, 0.1);
+		add(&camera, &velocity);
+		if (camera.y > 0.0){
+			camera.y = 0.0;
+		}
 	}
 	glTranslatef(camera.x, camera.y, camera.z);
 
@@ -263,7 +287,7 @@ void render_scene() {
 
 void render_box(Box b) {
 	glBegin(GL_QUADS);
-	// back face
+// back face
 	glColor3f(0.5, 1.0, 1.0);
 	glVertex3f(b.pos.x - (0.5 * b.width), b.pos.y + (0.5 * b.height),
 			b.pos.z - 0.5 * (b.depth));
@@ -273,7 +297,7 @@ void render_box(Box b) {
 			b.pos.z - 0.5 * (b.depth));
 	glVertex3f(b.pos.x - (0.5 * b.width), b.pos.y - (0.5 * b.height),
 			b.pos.z - 0.5 * (b.depth));
-	// right face
+// right face
 	glColor3f(1.0, 0.5, 1.0);
 	glVertex3f(b.pos.x + (0.5 * b.width), b.pos.y + (0.5 * b.height),
 			b.pos.z + 0.5 * (b.depth));
@@ -283,7 +307,7 @@ void render_box(Box b) {
 			b.pos.z - 0.5 * (b.depth));
 	glVertex3f(b.pos.x + (0.5 * b.width), b.pos.y - (0.5 * b.height),
 			b.pos.z + 0.5 * (b.depth));
-	// left face
+// left face
 	glColor3f(1.0, 1.0, 0.5);
 	glVertex3f(b.pos.x - (0.5 * b.width), b.pos.y + (0.5 * b.height),
 			b.pos.z + 0.5 * (b.depth));
@@ -293,7 +317,7 @@ void render_box(Box b) {
 			b.pos.z - 0.5 * (b.depth));
 	glVertex3f(b.pos.x - (0.5 * b.width), b.pos.y - (0.5 * b.height),
 			b.pos.z + 0.5 * (b.depth));
-	// top face
+// top face
 	glColor3f(1.0, 0.5, 0.5);
 	glVertex3f(b.pos.x + (0.5 * b.width), b.pos.y + (0.5 * b.height),
 			b.pos.z + 0.5 * (b.depth));
@@ -303,7 +327,7 @@ void render_box(Box b) {
 			b.pos.z - 0.5 * (b.depth));
 	glVertex3f(b.pos.x - (0.5 * b.width), b.pos.y + (0.5 * b.height),
 			b.pos.z + 0.5 * (b.depth));
-	// bottom face
+// bottom face
 	glColor3f(0.5, 0.5, 1.0);
 	glVertex3f(b.pos.x + (0.5 * b.width), b.pos.y - (0.5 * b.height),
 			b.pos.z + 0.5 * (b.depth));
@@ -313,7 +337,7 @@ void render_box(Box b) {
 			b.pos.z - 0.5 * (b.depth));
 	glVertex3f(b.pos.x - (0.5 * b.width), b.pos.y - (0.5 * b.height),
 			b.pos.z + 0.5 * (b.depth));
-	// front face
+// front face
 	glColor3f(0.5, 1.0, 0.5);
 	glVertex3f(b.pos.x - (0.5 * b.width), b.pos.y + (0.5 * b.height),
 			b.pos.z + 0.5 * (b.depth));
@@ -358,4 +382,10 @@ Box create_box(Vector3f pos, float width, float height, float depth) {
 	Box b = { .type = SHAPE_BOX, .pos = pos, .width = width, .height = height,
 			.depth = depth };
 	return b;
+}
+
+double current_ms(){
+	struct timeval  tv;
+	gettimeofday(&tv, NULL);
+	return (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000 ;
 }
